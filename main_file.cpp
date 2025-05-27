@@ -1,4 +1,4 @@
-/*
+﻿/*
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -29,19 +29,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "myCube.h"
 #include "myTeapot.h"
 
-float speed_x=0; //angular speed in radians
-float speed_y=0; //angular speed in radians
-float aspectRatio=1;
+double speed_x=0; //angular speed in radians
+double speed_y=0; //angular speed in radians
+double aspectRatio=1;
+double camera_distance = 3.0f;
+bool right_button_pressed = false;
+double last_x = 0, last_y = 0;
 ShaderProgram *sp; //Pointer to the shader program
 GLuint tex0;
 GLuint tex1;
 
 //Uncomment to draw a cube
-/*float* vertices=myCubeVertices;
-float* texCoords= myCubeTexCoords;
-float* colors = myCubeColors;
-float* normals = myCubeNormals;
-int vertexCount = myCubeVertexCount;*/
+//float* vertices=myCubeVertices;
+//float* texCoords= myCubeTexCoords;
+//float* colors = myCubeColors;
+//float* normals = myCubeNormals;
+//int vertexCount = myCubeVertexCount;
 
 //Uncomment to draw a teapot
 float* vertices = myTeapotVertices;
@@ -49,6 +52,8 @@ float* texCoords = myTeapotTexCoords;
 float* colors = myTeapotColors;
 float* normals = myTeapotVertexNormals;
 int vertexCount = myTeapotVertexCount;
+
+//float* vertices = modelVertices;
 
 GLuint readTexture(const char* filename) {
 	GLuint tex;
@@ -75,7 +80,41 @@ void error_callback(int error, const char* description) {
 	fputs(description, stderr);
 }
 
-void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods) {
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {	
+	if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+		if (action == GLFW_PRESS) {
+			right_button_pressed = true;
+			glfwGetCursorPos(window, &last_x, &last_y);
+		}
+		else if (action == GLFW_RELEASE) {
+			right_button_pressed = false;
+		}
+	}
+}
+
+void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
+	if (right_button_pressed) {
+		double dx = xpos - last_x;
+		double dy = ypos - last_y;
+		last_x = xpos;
+		last_y = ypos;
+
+		speed_x = dx * 1.0f;	// sensitivity myszy po osi x
+		speed_y = -dy * 1.0f;	// sensitivity myszy po osi y (inverted)
+	}
+	else {
+		speed_x = 0;
+		speed_y = 0;
+	}
+}
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+	camera_distance -= yoffset * 1.0f;
+	if (camera_distance < 1.0f) camera_distance = 0.5f; // scroll sensitivity
+	if (camera_distance > 10.0f) camera_distance = 10.0f;
+}
+
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (action==GLFW_PRESS) {
         if (key==GLFW_KEY_LEFT) speed_x=-PI/2;
         if (key==GLFW_KEY_RIGHT) speed_x=PI/2;
@@ -92,7 +131,7 @@ void keyCallback(GLFWwindow* window,int key,int scancode,int action,int mods) {
 
 void windowResizeCallback(GLFWwindow* window,int width,int height) {
     if (height==0) return;
-    aspectRatio=(float)width/(float)height;
+    aspectRatio=(double)width/(double)height;
     glViewport(0,0,width,height);
 }
 
@@ -104,6 +143,11 @@ void initOpenGLProgram(GLFWwindow* window) {
 	glEnable(GL_DEPTH_TEST);
 	glfwSetWindowSizeCallback(window,windowResizeCallback);
 	glfwSetKeyCallback(window,keyCallback);
+
+	glfwSetMouseButtonCallback(window, mouseButtonCallback);
+	glfwSetCursorPosCallback(window, cursorPositionCallback);
+	glfwSetScrollCallback(window, scrollCallback);
+
 	sp=new ShaderProgram("v_simplest.glsl",NULL,"f_simplest.glsl");
 	tex0 = readTexture("metal.png");
 	tex1 = readTexture("sky.png");
@@ -123,7 +167,7 @@ void drawScene(GLFWwindow* window,float angle_x,float angle_y) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glm::mat4 V=glm::lookAt(
-        glm::vec3(0.0f,0.0f,-3.0f),
+        glm::vec3(0.0f,0.0f,-camera_distance),
         glm::vec3(0.0f,0.0f,0.0f),
         glm::vec3(0.0f,1.0f,0.0f)); //compute view matrix
     glm::mat4 P=glm::perspective(50.0f*PI/180.0f, 1.0f, 1.0f, 50.0f); //compute projection matrix
@@ -140,7 +184,7 @@ void drawScene(GLFWwindow* window,float angle_x,float angle_y) {
 
 
     glEnableVertexAttribArray(sp->a("vertex")); //Enable sending data to the attribute vertex
-    glVertexAttribPointer(sp->a("vertex"),4,GL_FLOAT,false,0,vertices); //Specify source of the data for the attribute vertex
+    glVertexAttribPointer(sp->a("vertex"),4,GL_FLOAT,false,0, vertices); //Specify source of the data for the attribute vertex
 
 	glEnableVertexAttribArray(sp->a("color")); //Enable sending data to the attribute color
 	glVertexAttribPointer(sp->a("color"), 4, GL_FLOAT, false, 0, colors); //Specify source of the data for the attribute color
@@ -159,7 +203,7 @@ void drawScene(GLFWwindow* window,float angle_x,float angle_y) {
 	glEnableVertexAttribArray(sp->a("texCoord0")); //Enable sending data to the attribute color
 	glVertexAttribPointer(sp->a("texCoord0"), 2, GL_FLOAT, false, 0, texCoords); //Specify source of the data for the attribute normal
 
-    glDrawArrays(GL_TRIANGLES,0,vertexCount); //Draw the object
+    glDrawArrays(GL_TRIANGLES,0, vertexCount); //Draw the object
 
     glDisableVertexAttribArray(sp->a("vertex")); //Disable sending data to the attribute vertex
 	glDisableVertexAttribArray(sp->a("color")); //Disable sending data to the attribute color
@@ -181,8 +225,8 @@ int main(void)
 		fprintf(stderr, "Can't initialize GLFW.\n");
 		exit(EXIT_FAILURE);
 	}
-
-	window = glfwCreateWindow(500, 500, "OpenGL", NULL, NULL);  //Create a window 500pxx500px titled "OpenGL" and an OpenGL context associated with it.
+	
+	window = glfwCreateWindow(720, 720, "OpenGL", NULL, NULL);  //Create a window 500pxx500px titled "OpenGL" and an OpenGL context associated with it.
 
 	if (!window) //If no window is opened then close the program
 	{
@@ -208,6 +252,11 @@ int main(void)
 	//Main application loop
 	while (!glfwWindowShouldClose(window)) //As long as the window shouldnt be closed yet...
 	{
+		if (!right_button_pressed) {
+			speed_x = 0;
+			speed_y = 0;
+		}
+
         angle_x+=speed_x*glfwGetTime(); //Add angle by which the object was rotated in the previous iteration
 		angle_y+=speed_y*glfwGetTime(); //Add angle by which the object was rotated in the previous iteration
         glfwSetTime(0); //Zero the timer
