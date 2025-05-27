@@ -28,6 +28,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "shaderprogram.h"
 #include "myCube.h"
 #include "myTeapot.h"
+//#include <assimp/Importer.hpp>
+//#include <assimp/scene.h>
+//#include <assimp/postprocess.h>
 
 double speed_x=0; //angular speed in radians
 double speed_y=0; //angular speed in radians
@@ -39,13 +42,6 @@ ShaderProgram *sp; //Pointer to the shader program
 GLuint tex0;
 GLuint tex1;
 
-//Uncomment to draw a cube
-//float* vertices=myCubeVertices;
-//float* texCoords= myCubeTexCoords;
-//float* colors = myCubeColors;
-//float* normals = myCubeNormals;
-//int vertexCount = myCubeVertexCount;
-
 //Uncomment to draw a teapot
 float* vertices = myTeapotVertices;
 float* texCoords = myTeapotTexCoords;
@@ -53,7 +49,9 @@ float* colors = myTeapotColors;
 float* normals = myTeapotVertexNormals;
 int vertexCount = myTeapotVertexCount;
 
-//float* vertices = modelVertices;
+//Assimp::Importer importer;
+//const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+//cout << importer.GetErrorString() << endl;
 
 GLuint readTexture(const char* filename) {
 	GLuint tex;
