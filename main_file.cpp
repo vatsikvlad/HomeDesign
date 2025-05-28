@@ -51,10 +51,6 @@ float* colors = myTeapotColors;
 float* normals = myTeapotVertexNormals;
 int vertexCount = myTeapotVertexCount;
 
-//Assimp::Importer importer;
-//const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
-//cout << importer.GetErrorString() << endl;
-
 GLuint readTexture(const char* filename) {
 	GLuint tex;
 	glActiveTexture(GL_TEXTURE0);
@@ -135,6 +131,57 @@ void windowResizeCallback(GLFWwindow* window,int width,int height) {
     glViewport(0,0,width,height);
 }
 
+
+void loadModel(std::string plik) {
+	using namespace std;
+
+	Assimp::Importer importer;
+	const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+	cout << importer.GetErrorString() << endl;
+	
+	//scene->
+
+	//if (scene->HasMeshes()) {//Czy w pliku są siatki wielokątów
+	//	for (int i = 0; i < scene->mNumMeshes; i++) { //Liczba siatek wielokątów
+	//		importujMesh(scene->mMeshes[i]); //Dostęp do konkretnej siatki
+	//	}
+	//}
+
+	aiMesh* mesh = scene->mMeshes[0];
+	for (int i = 0; i < mesh->mNumVertices; i++) {
+		aiVector3D vertex = mesh->mVertices[i]; //aiVector3D podobny do glm::vec3
+		cout << vertex.x << " " << vertex.y << " " << vertex.z << endl;
+		aiVector3D normal = mesh->mNormals[i]; //Wektory znormalizowane
+		cout << normal.x << " " << normal.y << " " << normal.z << endl;
+		unsigned int liczba_zest = mesh->GetNumUVChannels();	//liczba zdefiniowanych zestawów wsp. teksturowania (zestawów jest max 8)
+		unsigned int wymiar_wsp_tex = mesh->mNumUVComponents[0];	//Liczba składowych wsp. teksturowania dla 0 zestawu.
+		aiVector3D texCoord = mesh->mTextureCoords[0][i];	//0 to numer zestawu współrzędnych teksturowania	
+		cout << texCoord.x << " " << texCoord.y << endl;	//x,y,z wykorzystywane jako u,v,w. 0 jeżeli tekstura ma mniej wymiarów
+	}
+
+	for (int i = 0; i < mesh->mNumFaces; i++) {
+		aiFace& face = mesh->mFaces[i]; //face to jeden z wielokątów siatki
+
+		//dla każdego indeksu->wierzchołka tworzącego wielokąt
+		//dla aiProcess_Triangulate to zawsze będzie 3
+		for (int j = 0; j < face.mNumIndices; j++) {
+			cout << face.mIndices[j] << " ";
+		}
+		cout << endl;
+	}
+
+	aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+
+	for (int i = 0; i < material->GetTextureCount(aiTextureType_DIFFUSE); i++) {
+		aiString str;//nazwa pliku
+		aiTextureMapping mapping;//jak wygenerowano wsp. teksturowania (opcj.)
+		unsigned int uvMapping;// numer zestawu wsp. teksturowania (opcjonalne)
+		ai_real blend; // współczynnik połączenia kolorów z kolejną teksturą (op.)
+		aiTextureOp op; //sposób łączenia kolorów z kolejną teksturą (opcjonalne)
+		aiTextureMapMode mapMode; //sposób adresowania tekstury (opcjonalne)
+		material->GetTexture(aiTextureType_DIFFUSE, i, &str, &mapping, &uvMapping, &blend, &op, &mapMode);
+	}
+}
 
 //Initialization code procedure
 void initOpenGLProgram(GLFWwindow* window) {
