@@ -28,11 +28,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "shaderprogram.h"
 #include "myCube.h"
 #include "myTeapot.h"
-#include <iostream>
-
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <iostream>
+#include <Models/OfficeChair/officeChair.h>
 
 double speed_x=0; //angular speed in radians
 double speed_y=0; //angular speed in radians
@@ -43,13 +43,19 @@ double last_x = 0, last_y = 0;
 ShaderProgram *sp; //Pointer to the shader program
 GLuint tex0;
 GLuint tex1;
-
+//ŻEBY TO DOBRZE BYŁO ZROBIONE TO TRZEBA ZROBIĆ KLASĘ
+std::vector<glm::vec4> verts;
+std::vector<glm::vec4> norms;
+std::vector<glm::vec2> texCoords;
+std::vector<unsigned int> indices;
 //Uncomment to draw a teapot
-float* vertices = myTeapotVertices;
-float* texCoords = myTeapotTexCoords;
-float* colors = myTeapotColors;
-float* normals = myTeapotVertexNormals;
-int vertexCount = myTeapotVertexCount;
+//float* vertices = myTeapotVertices;
+//float* texCoords = myTeapotTexCoords;
+//float* colors = myTeapotColors;
+//float* normals = myTeapotVertexNormals;
+//int vertexCount = myTeapotVertexCount;
+
+
 
 //Assimp::Importer importer;
 //const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
@@ -74,6 +80,59 @@ GLuint readTexture(const char* filename) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	return tex;
 }
+
+void loadModel(std::string plik) {
+	using namespace std;
+	Assimp::Importer importer;
+	const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+
+	if (!scene || !scene->HasMeshes()) {
+		//cout << "Błąd podczas wczytywania modelu: " << importer.GetErrorString() << endl;
+		return;
+	}
+
+	//cout << "Wczytano model: " << plik << endl;
+
+	for (unsigned int m = 0; m < scene->mNumMeshes; m++) {
+		aiMesh* mesh = scene->mMeshes[m];
+		unsigned int vertexOffset = verts.size(); // offset do indeksów
+
+		for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+			aiVector3D vertex = mesh->mVertices[i];
+			verts.push_back(glm::vec4(vertex.x, vertex.y, vertex.z, 1.0f));
+
+			aiVector3D normal = mesh->mNormals[i];
+			norms.push_back(glm::vec4(normal.x, normal.y, normal.z, 0.0f));
+
+			if (mesh->HasTextureCoords(0)) {
+				aiVector3D texCoord = mesh->mTextureCoords[0][i];
+				texCoords.push_back(glm::vec2(texCoord.x, texCoord.y));
+			}
+			else {
+				texCoords.push_back(glm::vec2(0.0f, 0.0f));
+			}
+		}
+
+		for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+			aiFace& face = mesh->mFaces[i];
+			for (unsigned int j = 0; j < face.mNumIndices; j++) {
+				indices.push_back(vertexOffset + face.mIndices[j]);
+			}
+		}
+
+		// (Opcjonalnie) Wczytaj teksturę z materiału
+		aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+		if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+			aiString str;
+			if (material->GetTexture(aiTextureType_DIFFUSE, 0, &str) == AI_SUCCESS) {
+				string texturePath = "Models/OfficeChair/" + string(str.C_Str());
+				tex0 = readTexture(texturePath.c_str()); // nadpisuje tex0
+				cout << "Załadowano teksturę: " << texturePath << endl;
+			}
+		}
+	}
+}
+
 
 //Error processing callback procedure
 void error_callback(int error, const char* description) {
@@ -151,6 +210,8 @@ void initOpenGLProgram(GLFWwindow* window) {
 	sp=new ShaderProgram("v_simplest.glsl",NULL,"f_simplest.glsl");
 	tex0 = readTexture("metal.png");
 	tex1 = readTexture("sky.png");
+
+	loadModel(std::string("Models/FerrariF40/source/F40/F40.obj")); 
 }
 
 //Release resources allocated by the program
@@ -184,13 +245,11 @@ void drawScene(GLFWwindow* window,float angle_x,float angle_y) {
 
 
     glEnableVertexAttribArray(sp->a("vertex")); //Enable sending data to the attribute vertex
-    glVertexAttribPointer(sp->a("vertex"),4,GL_FLOAT,false,0, vertices); //Specify source of the data for the attribute vertex
+    glVertexAttribPointer(sp->a("vertex"),4,GL_FLOAT,false,0, verts.data()); //Specify source of the data for the attribute vertex
 
-	glEnableVertexAttribArray(sp->a("color")); //Enable sending data to the attribute color
-	glVertexAttribPointer(sp->a("color"), 4, GL_FLOAT, false, 0, colors); //Specify source of the data for the attribute color
 
 	glEnableVertexAttribArray(sp->a("normal")); //Enable sending data to the attribute color
-	glVertexAttribPointer(sp->a("normal"), 4, GL_FLOAT, false, 0, normals); //Specify source of the data for the attribute normal
+	glVertexAttribPointer(sp->a("normal"), 4, GL_FLOAT, false, 0, norms.data()); //Specify source of the data for the attribute normal
 
 	glActiveTexture(GL_TEXTURE10);
 	glBindTexture(GL_TEXTURE_2D, tex0);
@@ -201,14 +260,17 @@ void drawScene(GLFWwindow* window,float angle_x,float angle_y) {
 	glUniform1i(sp->u("textureMap1"), 6);
 
 	glEnableVertexAttribArray(sp->a("texCoord0")); //Enable sending data to the attribute color
-	glVertexAttribPointer(sp->a("texCoord0"), 2, GL_FLOAT, false, 0, texCoords); //Specify source of the data for the attribute normal
+	glVertexAttribPointer(sp->a("texCoord0"), 2, GL_FLOAT, false, 0, texCoords.data()); //Specify source of the data for the attribute normal
 
-    glDrawArrays(GL_TRIANGLES,0, vertexCount); //Draw the object
-
+    //glDrawArrays(GL_TRIANGLES,0, vertexCount); //Draw the object
+	glDrawElements(GL_TRIANGLES,indices.size(),GL_UNSIGNED_INT,indices.data());
     glDisableVertexAttribArray(sp->a("vertex")); //Disable sending data to the attribute vertex
 	glDisableVertexAttribArray(sp->a("color")); //Disable sending data to the attribute color
 	glDisableVertexAttribArray(sp->a("normal")); //Disable sending data to the attribute normal
-	glDisableVertexAttribArray(sp->a("texCoord0"));
+	glDisableVertexAttribArray(sp->a("texCoord0")); 
+
+
+
 
     glfwSwapBuffers(window); //Copy back buffer to front buffer
 }
