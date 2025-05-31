@@ -28,11 +28,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "shaderprogram.h"
 #include "myCube.h"
 #include "myTeapot.h"
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
 #include <iostream>
 #include <Models/OfficeChair/officeChair.h>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
+
 
 double speed_x=0; //angular speed in radians
 double speed_y=0; //angular speed in radians
@@ -48,18 +48,6 @@ std::vector<glm::vec4> verts;
 std::vector<glm::vec4> norms;
 std::vector<glm::vec2> texCoords;
 std::vector<unsigned int> indices;
-//Uncomment to draw a teapot
-//float* vertices = myTeapotVertices;
-//float* texCoords = myTeapotTexCoords;
-//float* colors = myTeapotColors;
-//float* normals = myTeapotVertexNormals;
-//int vertexCount = myTeapotVertexCount;
-
-
-
-//Assimp::Importer importer;
-//const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
-//cout << importer.GetErrorString() << endl;
 
 GLuint readTexture(const char* filename) {
 	GLuint tex;
@@ -81,58 +69,80 @@ GLuint readTexture(const char* filename) {
 	return tex;
 }
 
-void loadModel(std::string plik) {
+void loadModel(std::string filepath) {
+	using namespace tinyobj;
 	using namespace std;
-	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFile(plik, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
 
-	if (!scene || !scene->HasMeshes()) {
-		//cout << "Błąd podczas wczytywania modelu: " << importer.GetErrorString() << endl;
+	attrib_t attrib;
+	vector<shape_t> shapes;
+	vector<material_t> materials;
+	string err;
+
+	size_t lastSlash = filepath.find_last_of("/\\");
+	string basedir = (lastSlash != string::npos) ? filepath.substr(0, lastSlash + 1) : "";
+
+	bool ret = LoadObj(&attrib, &shapes, &materials, &err, filepath.c_str(), basedir.c_str(), NULL, true, true);
+
+	if (!err.empty()) {
+		cerr << "TinyObjLoader ERR: " << err << endl;
+	}
+	if (!ret) {
+		cerr << "Failed to load OBJ file: " << filepath << endl;
 		return;
 	}
 
-	//cout << "Wczytano model: " << plik << endl;
+	for (size_t s = 0; s < shapes.size(); s++) {
+		size_t index_offset = 0;
 
-	for (unsigned int m = 0; m < scene->mNumMeshes; m++) {
-		aiMesh* mesh = scene->mMeshes[m];
-		unsigned int vertexOffset = verts.size(); // offset do indeksów
+		for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+			int fv = shapes[s].mesh.num_face_vertices[f];
 
-		for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
-			aiVector3D vertex = mesh->mVertices[i];
-			verts.push_back(glm::vec4(vertex.x, vertex.y, vertex.z, 1.0f));
+			for (int v = 0; v < fv; v++) {
+				index_t idx = shapes[s].mesh.indices[index_offset + v];
 
-			aiVector3D normal = mesh->mNormals[i];
-			norms.push_back(glm::vec4(normal.x, normal.y, normal.z, 0.0f));
+				float vx = attrib.vertices[3 * idx.vertex_index + 0];
+				float vy = attrib.vertices[3 * idx.vertex_index + 1];
+				float vz = attrib.vertices[3 * idx.vertex_index + 2];
+				verts.push_back(glm::vec4(vx, vy, vz, 1.0f));
 
-			if (mesh->HasTextureCoords(0)) {
-				aiVector3D texCoord = mesh->mTextureCoords[0][i];
-				texCoords.push_back(glm::vec2(texCoord.x, texCoord.y));
+				if (!attrib.normals.empty() && idx.normal_index >= 0) {
+					float nx = attrib.normals[3 * idx.normal_index + 0];
+					float ny = attrib.normals[3 * idx.normal_index + 1];
+					float nz = attrib.normals[3 * idx.normal_index + 2];
+					norms.push_back(glm::vec4(nx, ny, nz, 0.0f));
+				}
+				else {
+					norms.push_back(glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
+				}
+
+				if (!attrib.texcoords.empty() && idx.texcoord_index >= 0) {
+					float tx = attrib.texcoords[2 * idx.texcoord_index + 0];
+					float ty = attrib.texcoords[2 * idx.texcoord_index + 1];
+					texCoords.push_back(glm::vec2(tx, ty));
+				}
+				else {
+					texCoords.push_back(glm::vec2(0.0f, 0.0f));
+				}
+
+				indices.push_back(indices.size());
 			}
-			else {
-				texCoords.push_back(glm::vec2(0.0f, 0.0f));
-			}
+			index_offset += fv;
 		}
+	}
 
-		for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-			aiFace& face = mesh->mFaces[i];
-			for (unsigned int j = 0; j < face.mNumIndices; j++) {
-				indices.push_back(vertexOffset + face.mIndices[j]);
-			}
+	// Wczytaj teksturę jeśli materiał ją zawiera
+	if (!materials.empty()) {
+		string texname = materials[0].diffuse_texname;
+		if (!texname.empty()) {
+			string texpath = basedir + texname;
+			tex0 = readTexture(texpath.c_str());
+			cout << "Załadowano teksturę: " << texpath << endl;
 		}
-
-		// (Opcjonalnie) Wczytaj teksturę z materiału
-		aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-		if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-			aiString str;
-			if (material->GetTexture(aiTextureType_DIFFUSE, 0, &str) == AI_SUCCESS) {
-				string texturePath = "Models/OfficeChair/" + string(str.C_Str());
-				tex0 = readTexture(texturePath.c_str()); // nadpisuje tex0
-				cout << "Załadowano teksturę: " << texturePath << endl;
-			}
+		else {
+			cout << "Brak tekstury w materiale!" << endl;
 		}
 	}
 }
-
 
 //Error processing callback procedure
 void error_callback(int error, const char* description) {
@@ -208,10 +218,10 @@ void initOpenGLProgram(GLFWwindow* window) {
 	glfwSetScrollCallback(window, scrollCallback);
 
 	sp=new ShaderProgram("v_simplest.glsl",NULL,"f_simplest.glsl");
-	tex0 = readTexture("metal.png");
-	tex1 = readTexture("sky.png");
+	//tex0 = readTexture("metal.png");
+	//tex1 = readTexture("sky.png");
 
-	loadModel(std::string("Models/FerrariF40/source/F40/F40.obj")); 
+	loadModel(std::string("Models/DesignChair/DesignChair1.obj")); 
 }
 
 //Release resources allocated by the program

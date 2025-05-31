@@ -1,33 +1,16 @@
-#version 330
+#version 330 core
 
-//Uniform variables
+layout(location = 0) in vec4 vertex;
+layout(location = 1) in vec4 normal;
+layout(location = 2) in vec2 texCoord0;
+
 uniform mat4 P;
 uniform mat4 V;
 uniform mat4 M;
 
-//Attributes
-in vec4 vertex; //Vertex coordinates in model space
-in vec4 color; //vertex color
-in vec4 normal; //Vertex normal in model space
-in vec2 texCoord0;
+out vec2 vTexCoord;
 
-//Varying variables
-out vec4 ic;
-out vec4 l;
-out vec4 n;
-out vec4 v;
-out vec2 iTexCoord0;
-
-void main(void) {
-
-    iTexCoord0 = texCoord0;
-
-    vec4 lp = vec4(0, 0, -6, 1); //light position, world space
-    l = normalize(V * lp - V * M * vertex); //vector towards the light in eye space
-    v = normalize(vec4(0, 0, 0, 1) - V * M * vertex); //vector towards the viewer in eye space
-    n = normalize(V * M * normal); //normal vector in eye space
-
-    ic = color;
-
+void main() {
     gl_Position = P * V * M * vertex;
+    vTexCoord = texCoord0;
 }
